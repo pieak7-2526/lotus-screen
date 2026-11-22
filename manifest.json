@@ -1,0 +1,10 @@
+{
+  "name": "Lotus's Calendar Screen",
+  "short_name": "ปฏิทินสาขา",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0a1b1d",
+  "theme_color": "#0a1b1d",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
