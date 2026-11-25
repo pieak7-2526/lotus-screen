@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a1b1d">
+<link rel="icon" href="icon.svg">
+</head>
+<body>
+<title>Lotus's Calendar Screen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+/* Layout: landscape = info rail (clock, weather, PM2.5) left + month wall right; portrait/phone = stacked. Dark single look for screens. */
+:root {
+  --ink: #0a1b1d;        /* page */
+  --panel: #10282b;      /* surfaces */
+  --line: #1f4044;
+  --fg: #e8f3f1;
+  --muted: #8fb0ac;
+  --accent: #2fc7b6;     /* teal */
+  --holiday: #ff8a7a;
+  --promo: #f6c453;
+  --store: #8fa8ff;
+  --display: "Bai Jamjuree", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif;
+  --body: "IBM Plex Sans Thai", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif;
+  --u: clamp(12px, 1.25vmin + 0.45vw, 30px);  /* base unit scales up on TVs */
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--ink); color: var(--fg);
+  font-family: var(--body); font-size: var(--u);
+  margin: 0; overflow-x: hidden;
+}
+.app {
+  min-height: 100%; box-sizing: border-box;
+  display: grid; gap: calc(var(--u) * 1.1);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.9fr);
+  padding-block: calc(var(--u) * 1.1);
+  padding-left: max(16px, env(safe-area-inset-left, 0px), calc(var(--u) * 1.1));
+  padding-right: max(16px, env(safe-area-inset-right, 0px), calc(var(--u) * 1.1));
+}
+@media (orientation: landscape) and (min-width: 900px) { .app { height: 100%; } }
+.rail { overflow-y: auto; }
+.rail, .wall { display: flex; flex-direction: column; gap: calc(var(--u) * 1.1); min-width: 0; min-height: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: calc(var(--u) * 0.9); padding: calc(var(--u) * 1.1); min-width: 0; }
+.label { font-size: 0.78em; letter-spacing: 0.06em; color: var(--muted); display: flex; justify-content: space-between; gap: .5em; align-items: baseline; }
+.num { font-family: var(--display); font-variant-numeric: tabular-nums; }
+
+/* Clock */
+.clock .time { font-family: var(--display); font-weight: 700; font-size: 4.2em; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.clock .time small { font-size: 0.32em; color: var(--muted); font-weight: 600; margin-left: .2em; }
+.clock .date { font-size: 1.25em; margin-top: .35em; }
+.clock .lunar { color: var(--muted); font-size: 0.9em; margin-top: .15em; }
+.mode[data-for="sw"] .time, .mode[data-for="cd"] .time { font-size: 3.5em; }
+.tabs { margin-top: -.2em; display: flex; gap: .3em; margin-bottom: .45em; }
+.tab { font: inherit; font-size: .8em; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 99px; padding: .25em .9em; cursor: pointer; }
+.tab[aria-selected="true"] { color: var(--ink); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.tab:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.ctrl, .presets { display: flex; flex-wrap: wrap; gap: .4em; margin-top: .6em; }
+.ctrl .btn, .presets .btn { min-height: 2em; padding: .2em .7em; font-size: .82em; }
+.btn.go { background: var(--accent); color: var(--ink); border-color: var(--accent); font-weight: 600; }
+.btn.go.pause { background: var(--promo); border-color: var(--promo); }
+.presets { gap: .3em; margin-top: .4em; } .presets .btn { font-size: .72em; padding: .15em .55em; min-height: 1.9em; }
+.laps { margin: .4em 0 0; max-height: 3em; padding-left: 1.4em; color: var(--muted); font-size: .85em; overflow: auto; font-variant-numeric: tabular-nums; }
+.clock.done { animation: flash 1s steps(2) infinite; }
+.clock.done #cdTime { color: var(--holiday); }
+@keyframes flash { 50% { background: color-mix(in srgb, var(--holiday) 30%, var(--panel)); } }
+@media (prefers-reduced-motion: reduce) { .clock.done { animation: none; background: color-mix(in srgb, var(--holiday) 25%, var(--panel)); } }
+
+/* Weather + PM */
+.wx { display: grid; grid-template-columns: auto 1fr; gap: .2em 1em; align-items: center; }
+.wx svg { width: 3.6em; height: 3.6em; grid-row: span 2; }
+.wx .temp { font-family: var(--display); font-weight: 700; font-size: 3em; line-height: 1; }
+.wx .desc { font-size: 1.05em; }
+.wx .meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .3em 1.2em; color: var(--muted); font-size: .9em; margin-top: .4em; }
+.pm { display: grid; grid-template-columns: auto 1fr; gap: .6em 1em; align-items: center; }
+.pm .ring { width: 4.8em; height: 4.8em; border-radius: 50%; display: grid; place-items: center; border: .38em solid var(--pmc, var(--muted)); text-align: center; }
+.pm .ring b { font-family: var(--display); font-size: 1.7em; line-height: 1; display: block; }
+.pm .ring span { font-size: .62em; color: var(--muted); }
+.pm .level { font-family: var(--display); font-weight: 600; font-size: 1.4em; color: var(--pmc, var(--fg)); }
+.pm .advice { color: var(--muted); font-size: .9em; }
+.pm .scale { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; height: .45em; }
+.pm .scale i { border-radius: 2px; opacity: .35; }
+.pm .scale i.on { opacity: 1; }
+.status { font-size: .78em; color: var(--muted); }
+.status.err { color: var(--holiday); }
+
+/* Calendar wall */
+.monthbar { display: flex; align-items: center; gap: .6em; flex-wrap: wrap; }
+.monthbar h1 { font-family: var(--display); font-weight: 700; font-size: 1.7em; margin: 0; flex: 1; text-wrap: balance; line-height: 1.1; }
+.monthbar h1 span { color: var(--accent); }
+.btn { font: inherit; font-size: .9em; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: .6em; padding: .45em .8em; cursor: pointer; min-height: 2.4em; }
+.btn:hover { border-color: var(--accent); }
+.btn:focus-visible, .cell:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.cal { flex: 1; display: grid; grid-template-rows: auto; min-height: 0; }
+.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: calc(var(--u) * .35); height: 100%; grid-auto-rows: minmax(3.6em, 1fr); }
+.dow { font-size: .72em; color: var(--muted); text-align: center; padding-bottom: .3em; letter-spacing: .04em; }
+.dow.we, .cell.we .d { color: var(--holiday); }
+.dow-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: calc(var(--u) * .35); }
+.cell { background: var(--panel); border: 1px solid var(--line); border-radius: .55em; padding: .35em .45em; display: flex; flex-direction: column; gap: .2em; min-width: 0; overflow: hidden; }
+.cell.out { opacity: .32; }
+.cell .d { font-family: var(--display); font-weight: 600; font-size: 1em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cell.today { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+.cell.today .d { color: var(--ink); background: var(--accent); border-radius: .3em; padding: 0 .3em; align-self: flex-start; }
+.cell.hol { background: color-mix(in srgb, var(--holiday) 10%, var(--panel)); }
+.ev { font-size: .64em; line-height: 1.25; padding: .1em .35em; border-radius: .3em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: .28em solid var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+.more { font-size: .68em; color: var(--muted); }
+.t-holiday { --c: var(--holiday); } .t-lotus { --c: var(--accent); } .t-promo { --c: var(--promo); } .t-store { --c: var(--store); }
+.t-begin { --c: #3ccf4e; } .t-end { --c: #ff5a36; } .t-close { --c: #6fb6ff; } .t-obs { --c: var(--muted); } .t-star { --c: var(--holiday); }
+.ev.t-begin, .ev.t-end { background: var(--c); color: #fff; border-left: 0; text-align: center; font-weight: 600; }
+.cell .top { display: flex; align-items: baseline; gap: .3em; }
+.cell .star { color: var(--holiday); font-size: .95em; }
+.cell .wk { margin-left: auto; font-family: var(--display); font-weight: 700; font-size: .78em; color: var(--muted); opacity: .7; }
+.photo { padding: 0; overflow: hidden; position: relative; flex: 1 1 auto; min-height: 8em; }
+.rail > .card:not(.photo) { padding-block: calc(var(--u) * .85); }
+.photo img { transition: opacity .6s; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; display: block; position: absolute; inset: 0; }
+.photo figcaption { position: absolute; left: .7em; bottom: .7em; background: rgb(10 27 29 / .78); color: var(--fg); font-family: var(--display); font-weight: 600; font-size: .9em; padding: .25em .8em; border-radius: 99px; }
+.photo figcaption b { color: var(--promo); }
+
+/* Upcoming */
+.upcoming ul { list-style: none; margin: .5em 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(14em, 1fr)); gap: .45em 1.2em; }
+.upcoming li { display: grid; grid-template-columns: 3.4em 1fr; gap: .7em; align-items: center; min-width: 0; }
+.upcoming .when { text-align: center; border-radius: .45em; padding: .2em 0; background: color-mix(in srgb, var(--c) 18%, transparent); border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); }
+.upcoming .when b { display: block; font-family: var(--display); font-size: 1.3em; line-height: 1.05; }
+.upcoming .when span { font-size: .68em; color: var(--muted); }
+.upcoming .what { min-width: 0; }
+.upcoming .what div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upcoming .what small { color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: .3em 1em; font-size: .75em; color: var(--muted); }
+.legend i { display: inline-block; width: .8em; height: .8em; border-radius: 2px; background: var(--c); margin-right: .35em; vertical-align: -.05em; }
+.note { font-size: .75em; color: var(--promo); }
+
+/* Settings */
+dialog { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 1em; padding: 1.2em; width: min(30em, calc(100vw - 32px)); box-sizing: border-box; font-size: var(--u); }
+dialog::backdrop { background: rgb(0 0 0 / .6); }
+dialog h2 { font-family: var(--display); margin: 0 0 .6em; font-size: 1.3em; }
+dialog input { font: inherit; width: 100%; box-sizing: border-box; padding: .55em .7em; border-radius: .5em; border: 1px solid var(--line); background: var(--ink); color: var(--fg); }
+.results { display: grid; gap: .3em; margin: .6em 0; max-height: 14em; overflow: auto; }
+.results button { text-align: left; }
+.row { display: flex; gap: .5em; flex-wrap: wrap; justify-content: flex-end; margin-top: .8em; }
+
+/* Narrow / portrait */
+@media (orientation: portrait), (max-width: 899px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .rail { display: grid; grid-template-columns: repeat(auto-fit, minmax(15em, 1fr)); }
+  .clock .time { font-size: 4em; }
+  .grid { grid-auto-rows: minmax(3.6em, auto); }
+  .photo { aspect-ratio: 16 / 10; flex: none; min-height: 0; grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+  .ev { font-size: 0; height: .35em; padding: 0; border-left-width: 0; background: var(--c); }
+  .cell { padding: .25em; }
+  .cell .d { font-size: 1em; }
+  .cell .wk { display: none; }
+  .monthbar h1 { font-size: 1.6em; }
+}
+@media (prefers-reduced-motion: no-preference) { .cell, .btn { transition: border-color .2s; } }
+
+/* ---- preview: bigger photo ---- */
+.photo { flex: 1 1 46%; min-height: 12em; }
+.photo img { object-position: center 40%; }
+.photo figcaption { font-size: 1.05em; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 1.1); min-width: 0; }
+.duo .card { padding: calc(var(--u) * .8); min-width: 0; }
+.duo .wx { grid-template-columns: auto 1fr; gap: .1em .6em; }
+.duo .wx svg { width: 2.6em; height: 2.6em; }
+.duo .wx .temp { font-size: 2.3em; }
+.duo .wx .desc { font-size: .85em; }
+.duo .wx .meta { font-size: .72em; gap: .1em .8em; }
+.duo .pm { grid-template-columns: auto 1fr; gap: .4em .6em; }
+.duo .pm .ring { width: 3.8em; height: 3.8em; border-width: .3em; }
+.duo .pm .ring b { font-size: 1.3em; }
+.duo .pm .level { font-size: .95em; }
+.duo .pm .advice { font-size: .72em; }
+.duo .status { font-size: .66em; }
+.duo .label { font-size: .7em; }
+.clock .time { font-size: 3.6em; }
+.clock .date { font-size: 1.05em; }
+@media (orientation: portrait), (max-width: 899px) { .duo { grid-column: 1 / -1; } .photo { min-height: 0; } }
+@media (max-width: 520px) { .duo { grid-template-columns: 1fr; } }
+</style>
+
+<div class="app" id="app">
+  <aside class="rail">
+    <figure class="card photo" style="margin:0"><img id="photoImg" src="img/readyday.jpg" alt="ภาพกิจกรรม Ready Day โลตัส สาขาพล"><figcaption>READY DAY · <b id="photoCap">โลตัส สาขาพล</b></figcaption></figure>
+
+    <section class="card clock" aria-label="เวลา" id="clockCard">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-mode="clock" aria-selected="true">นาฬิกา</button>
+        <button class="tab" role="tab" data-mode="sw" aria-selected="false">จับเวลา</button>
+        <button class="tab" role="tab" data-mode="cd" aria-selected="false">ตั้งเวลา</button>
+      </div>
+      <div class="mode" data-for="clock">
+        <div class="time" id="time">--:--<small id="sec">--</small></div>
+        <div class="date" id="date">&nbsp;</div>
+        <div class="lunar" id="todayEv">&nbsp;</div>
+      </div>
+      <div class="mode" data-for="sw" hidden>
+        <div class="time" id="swTime">00:00<small>.0</small></div>
+        <div class="ctrl">
+          <button class="btn go" id="swStart">เริ่ม</button>
+          <button class="btn" id="swLap">บันทึกรอบ</button>
+          <button class="btn" id="swReset">ล้าง</button>
+        </div>
+        <ol class="laps" id="swLaps"></ol>
+      </div>
+      <div class="mode" data-for="cd" hidden>
+        <div class="time" id="cdTime">05:00</div>
+        <div class="presets" id="cdPresets"></div>
+        <div class="ctrl">
+          <button class="btn" id="cdMinus" aria-label="ลด 1 นาที">−1 นาที</button>
+          <button class="btn" id="cdPlus" aria-label="เพิ่ม 1 นาที">+1 นาที</button>
+          <button class="btn go" id="cdStart">เริ่ม</button>
+          <button class="btn" id="cdReset">รีเซ็ต</button>
+        </div>
+        <div class="lunar" id="cdNote">&nbsp;</div>
+      </div>
+    </section>
+
+    <div class="duo">
+    <section class="card" aria-label="อุณหภูมิ">
+      <div class="label"><span>อุณหภูมิ</span><span id="place">อ.พล ขอนแก่น</span></div>
+      <div class="wx" style="margin-top:.6em">
+        <svg id="wxIcon" viewBox="0 0 64 64" aria-hidden="true"></svg>
+        <div class="temp num" id="temp">--°</div>
+        <div class="desc" id="wxDesc">กำลังโหลด…</div>
+        <div class="meta"><span id="feels">รู้สึกเหมือน --°</span><span id="hum">ความชื้น --%</span><span id="hilo">สูง/ต่ำ --/--°</span></div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="ฝุ่น PM2.5">
+      <div class="label"><span>ฝุ่น PM2.5</span><span>µg/m³</span></div>
+      <div class="pm" id="pm" style="margin-top:.6em">
+        <div class="ring"><div><b id="pmVal">--</b><span>µg/m³</span></div></div>
+        <div><div class="level" id="pmLevel">กำลังโหลด…</div><div class="advice" id="pmAdvice">&nbsp;</div></div>
+        <div class="scale" id="pmScale" aria-hidden="true"></div>
+      </div>
+      <div class="status" id="wxStatus" style="margin-top:.6em">&nbsp;</div>
+    </section>
+    </div>
+  </aside>
+
+  <main class="wall">
+    <div class="monthbar">
+      <h1 id="monthTitle">ปฏิทิน</h1>
+      <button class="btn" id="prev" aria-label="เดือนก่อน">‹</button>
+      <button class="btn" id="todayBtn">วันนี้</button>
+      <button class="btn" id="next" aria-label="เดือนถัดไป">›</button>
+      <button class="btn" id="settingsBtn">ตั้งค่า</button>
+      <button class="btn" id="fsBtn">เต็มจอ</button>
+    </div>
+    <section class="card cal" aria-label="ปฏิทินรายเดือน" style="display:flex;flex-direction:column;gap:.3em">
+      <div class="dow-row" id="dow"></div>
+      <div class="grid" id="grid"></div>
+    </section>
+    <section class="card upcoming" aria-label="กิจกรรมที่กำลังจะมาถึง">
+      <div class="label"><span>กำลังจะมาถึง</span>
+        <span class="legend"><span class="t-holiday"><i></i>วันหยุด</span><span class="t-lotus"><i></i>Lotus's</span><span class="t-promo"><i></i>โปรโมชัน</span><span class="t-store"><i></i>งานสาขา</span><span class="t-begin"><i></i>Begin/End</span><span class="t-close"><i></i>Month-End Closing</span><span class="t-star"><i></i>★ No instore activity</span></span>
+      </div>
+      <ul id="upcoming"></ul>
+      <div class="note" id="note"></div>
+    </section>
+  </main>
+</div>
+
+<dialog id="settings">
+  <h2>ตั้งค่าตำแหน่ง</h2>
+  <label for="cityInput" class="label" style="margin-bottom:.3em">ค้นหาเมือง / อำเภอ</label>
+  <input id="cityInput" type="search" placeholder="เช่น เชียงใหม่, บางนา, Khon Kaen" autocomplete="off">
+  <div class="results" id="results"></div>
+  <div class="status" id="setStatus">&nbsp;</div>
+  <div class="row">
+    <button class="btn" id="geoBtn">ใช้ตำแหน่งปัจจุบัน</button>
+    <button class="btn" id="closeSet">ปิด</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const TZ = "Asia/Bangkok";
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+  let loc = store.get("screen.loc", { name: "อ.พล ขอนแก่น", lat: 15.8167, lon: 102.6 });
+
+  /* ---------- date helpers (Bangkok time) ---------- */
+  const nowBkk = () => { const p = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(new Date()); const g = (t) => +p.find(x => x.type === t).value; return { y: g("year"), m: g("month"), d: g("day"), h: g("hour"), mi: g("minute"), s: g("second") }; };
+  const pad = (n) => String(n).padStart(2, "0");
+  const key = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+  const TH_MONTHS = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+  const TH_MON_S = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  const TH_DAYS = ["อาทิตย์","จันทร์","อังคาร","พุธ","พฤหัสบดี","ศุกร์","เสาร์"];
+  const TH_DOW_S = ["จ","อ","พ","พฤ","ศ","ส","อา"];  /* Monday-first, like the Lotus's calendar */
+  /* Photos shown for each month (first = the month's calendar photo). Change files/captions here. Rotates every 12 s. */
+  const MONTH_PHOTOS = {
+    1:  [["m01.jpg","ภาพหมู่ทั้งสาขา"],["readyday.jpg","ภาพหมู่หน้าเวที"]],
+    2:  [["m02.jpg","ร่วมวงอาหาร"],["x02.jpg","ร่วมวงอาหาร"],["x03.jpg","ตักก๋วยเตี๋ยว"]],
+    3:  [["m03.jpg","กิจกรรมบนเวที"],["x04.jpg","เตรียมส้มตำ"]],
+    4:  [["m04.jpg","ผู้บริหารร่วมกิจกรรม"]],
+    5:  [["m05.jpg","พิธีเปิดงาน"]],
+    6:  [["m06.jpg","เกมเชือก"],["x06.jpg","ร่วมวงอาหาร"]],
+    7:  [["m07.jpg","รวมพลังทีม"]],
+    8:  [["m08.jpg","กิจกรรมนั่งจับคู่"]],
+    9:  [["m09.jpg","ผูกข้อไม้ข้อมือ"],["x01.jpg","ผูกข้อไม้ข้อมือ"],["x05.jpg","ภาพรวมพิธีผูกข้อมือ"]],
+    10: [["m10.jpg","มอบรางวัล"]],
+    11: [["m11.jpg","ผู้ได้รับรางวัล"]],
+    12: [["m12.jpg","ภาพหมู่ปิดงาน"]]
+  };
+  let photoTimer = null, photoIdx = 0;
+  function showPhotos(m) {
+    const set = MONTH_PHOTOS[m] || [["readyday.jpg","โลตัส สาขาพล"]];
+    photoIdx = 0; clearInterval(photoTimer);
+    const put = () => { const [f, c] = set[photoIdx % set.length]; const img = $("photoImg");
+      img.style.opacity = 0; setTimeout(() => { img.src = "img/" + f; img.alt = c; $("photoCap").textContent = c; img.style.opacity = 1; }, 300); };
+    put();
+    if (set.length > 1) photoTimer = setInterval(() => { photoIdx++; put(); }, 12000);
+  }  /* screen opens on this year until it arrives */
+  const dowOf = (y, m, d) => new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const daysIn = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const isoWeek = (y, m, d) => { const t = new Date(Date.UTC(y, m - 1, d)); t.setUTCDate(t.getUTCDate() + 3 - ((t.getUTCDay() + 6) % 7)); const f = new Date(Date.UTC(t.getUTCFullYear(), 0, 4)); return 1 + Math.round(((t - f) / 864e5 - 3 + ((f.getUTCDay() + 6) % 7)) / 7); };
+  const toUTC = (s) => { const [y, m, d] = s.split("-").map(Number); return Date.UTC(y, m - 1, d); };
+
+  /* ---------- calendar data: data/<year>.js loaded on demand ---------- */
+  window.CALENDAR_DATA = window.CALENDAR_DATA || {};
+  const tried = {};
+  function loadYear(y) {
+    if (window.CALENDAR_DATA[y] || tried[y]) return Promise.resolve();
+    tried[y] = new Promise((res) => { const s = document.createElement("script"); s.src = `data/${y}.js`; s.onload = s.onerror = () => res(); document.head.appendChild(s); });
+    return tried[y];
+  }
+  function eventsOn(k) {
+    const y = +k.slice(0, 4), t = toUTC(k), out = [];
+    for (const yy of [y - 1, y, y + 1]) { const ds = window.CALENDAR_DATA[yy]; if (!ds) continue;
+      for (const e of ds.events) { const a = toUTC(e.date), b = toUTC(e.end || e.date); if (t >= a && t <= b) out.push(e); } }
+    const order = { begin: 0, end: 0, holiday: 1, close: 2, lotus: 3, promo: 4, store: 5, obs: 6, star: 9 };
+    return out.sort((p, q) => (order[p.type] ?? 9) - (order[q.type] ?? 9));
+  }
+
+  /* ---------- clock ---------- */
+  let today = nowBkk();
+  const home = () => ({ y: today.y, m: today.m });   /* always open on the current month */
+  let idleTimer = null;   /* after browsing other months, return to the current month after 3 minutes */
+  const armIdle = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => { const h = home(); if (view.y !== h.y || view.m !== h.m) { view = h; render(); } }, 3 * 60 * 1000); };
+  ["click", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, armIdle, { passive: true }));
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { today = nowBkk(); view = home(); render(); } });
+  let view = home();
+  function tick() {
+    const n = nowBkk();
+    $("time").firstChild.nodeValue = `${pad(n.h)}:${pad(n.mi)}`;
+    $("sec").textContent = pad(n.s);
+    if (n.d !== today.d || !$("date").dataset.set) {
+      const rolled = n.d !== today.d; today = n;
+      $("date").textContent = `วัน${TH_DAYS[dowOf(n.y, n.m, n.d)]}ที่ ${n.d} ${TH_MONTHS[n.m - 1]} พ.ศ. ${n.y + 543}`;
+      $("date").dataset.set = 1;
+      if (rolled) { view = home(); render(); }
+      else renderToday();
+    }
+  }
+  function renderToday() {
+    const evs = eventsOn(key(today.y, today.m, today.d));
+    $("todayEv").textContent = evs.length ? "วันนี้: " + evs.map(e => e.title).join(" · ") : `ค.ศ. ${today.y}`;
+  }
+
+  /* ---------- month grid ---------- */
+  $("dow").innerHTML = TH_DOW_S.map((d, i) => `<div class="dow${i > 4 ? " we" : ""}">${d}</div>`).join("");
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  async function render() {
+    await Promise.all([loadYear(view.y - 1), loadYear(view.y), loadYear(view.y + 1)]);
+    const { y, m } = view;
+    $("monthTitle").innerHTML = `${TH_MONTHS[m - 1]} <span class="num">${y + 543}</span>`;
+    showPhotos(m);
+    const first = (dowOf(y, m, 1) + 6) % 7, dim = daysIn(y, m);
+    const prevY = m === 1 ? y - 1 : y, prevM = m === 1 ? 12 : m - 1, pdim = daysIn(prevY, prevM);
+    const cells = [], total = Math.ceil((first + dim) / 7) * 7;
+    for (let i = 0; i < total; i++) {
+      let cy = y, cm = m, cd = i - first + 1, out = false;
+      if (cd < 1) { cy = prevY; cm = prevM; cd = pdim + cd; out = true; }
+      else if (cd > dim) { cd -= dim; cm = m === 12 ? 1 : m + 1; cy = m === 12 ? y + 1 : y; out = true; }
+      const k = key(cy, cm, cd), all = eventsOn(k), dow = i % 7;
+      const star = all.some(e => e.type === "star"), evs = all.filter(e => e.type !== "star" && !(out && (e.type === "begin" || e.type === "end")));
+      const isToday = cy === today.y && cm === today.m && cd === today.d;
+      const cls = ["cell", out && "out", dow > 4 && "we", isToday && "today", evs.some(e => e.type === "holiday") && "hol"].filter(Boolean).join(" ");
+      const shown = evs.slice(0, 3).map(e => `<div class="ev t-${esc(e.type)}" title="${esc(e.title)}">${esc(e.title)}</div>`).join("");
+      const more = evs.length > 3 ? `<div class="more">+${evs.length - 3} รายการ</div>` : "";
+      const wk = dow === 0 ? `<span class="wk">W${pad(isoWeek(cy, cm, cd))}</span>` : "";
+      cells.push(`<div class="${cls}"${isToday ? ' aria-current="date"' : ""}><div class="top"><span class="d">${cd}</span>${star ? '<span class="star" title="No instore activity">★</span>' : ""}${wk}</div>${shown}${more}</div>`);
+    }
+    $("grid").innerHTML = cells.join("");
+    renderUpcoming(); renderToday();
+    const ds = window.CALENDAR_DATA[y];
+    $("note").textContent = ds ? (ds.note || "") : `ยังไม่มีข้อมูลปฏิทินปี ${y} (เพิ่มไฟล์ data/${y}.js)`;
+  }
+  function renderUpcoming() {
+    const t0 = toUTC(key(today.y, today.m, today.d)), list = [], tNow = t0;
+    for (const yy of [today.y, today.y + 1]) { const ds = window.CALENDAR_DATA[yy]; if (!ds) continue;
+      for (const e of ds.events) if (toUTC(e.end || e.date) >= t0 && e.type !== "begin" && e.type !== "end" && !list.includes(e)) list.push(e); }
+    list.sort((a, b) => toUTC(a.date) - toUTC(b.date));
+    const html = list.slice(0, 6).map(e => {
+      const [, mm, dd] = e.date.split("-").map(Number);
+      const days = Math.round((toUTC(e.date) - tNow) / 864e5);
+      const rel = days <= 0 ? (e.end ? "กำลังดำเนินอยู่" : "วันนี้") : days === 1 ? "พรุ่งนี้" : `อีก ${days} วัน`;
+      const range = e.end ? ` ถึง ${+e.end.slice(8)} ${TH_MON_S[+e.end.slice(5, 7) - 1]}` : "";
+      return `<li class="t-${esc(e.type)}"><div class="when"><b>${dd}</b><span>${TH_MON_S[mm - 1]}</span></div><div class="what"><div>${esc(e.title)}</div><small>${rel}${range}</small></div></li>`;
+    }).join("");
+    $("upcoming").innerHTML = html || `<li style="grid-template-columns:1fr"><span class="status">ยังไม่มีกิจกรรมที่กำลังจะมาถึง</span></li>`;
+  }
+  const shift = (d) => { let m = view.m + d, y = view.y; if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; } view = { y, m }; render(); };
+  $("prev").onclick = () => shift(-1);
+  $("next").onclick = () => shift(1);
+  $("todayBtn").onclick = () => { view = home(); render(); };
+  document.addEventListener("keydown", (e) => {
+    if ($("settings").open || e.target.tagName === "INPUT" || e.target.closest(".clock")) return;
+    if (e.key === "ArrowLeft" || e.key === "PageUp") shift(-1);
+    else if (e.key === "ArrowRight" || e.key === "PageDown") shift(1);
+    else if (e.key === "Home" || e.key === "0") $("todayBtn").click();
+  });
+
+  /* ---------- weather (Open-Meteo, free, no key) ---------- */
+  const WX = { 0:["ท้องฟ้าแจ่มใส","sun"],1:["ท้องฟ้าโปร่ง","sun"],2:["มีเมฆบางส่วน","part"],3:["เมฆมาก","cloud"],45:["หมอก","fog"],48:["หมอกน้ำค้างแข็ง","fog"],51:["ฝนปรอยเล็กน้อย","rain"],53:["ฝนปรอย","rain"],55:["ฝนปรอยหนาแน่น","rain"],61:["ฝนเล็กน้อย","rain"],63:["ฝนปานกลาง","rain"],65:["ฝนหนัก","rain"],80:["ฝนตกเป็นช่วง","rain"],81:["ฝนตกเป็นช่วง ปานกลาง","rain"],82:["ฝนตกหนักเป็นช่วง","rain"],95:["พายุฝนฟ้าคะนอง","storm"],96:["พายุฝนฟ้าคะนอง มีลูกเห็บ","storm"],99:["พายุฝนฟ้าคะนองรุนแรง","storm"] };
+  const ICONS = {
+    sun: `<circle cx="32" cy="32" r="12" fill="#f6c453"/><g stroke="#f6c453" stroke-width="4" stroke-linecap="round"><path d="M32 6v7M32 51v7M6 32h7M51 32h7M13.6 13.6l5 5M45.4 45.4l5 5M13.6 50.4l5-5M45.4 18.6l5-5"/></g>`,
+    moon: `<path d="M40 10a22 22 0 1 0 14 34A18 18 0 0 1 40 10z" fill="#d9e4ff"/>`,
+    cloud: `<path d="M20 48h26a11 11 0 0 0 0-22 15 15 0 0 0-28 4 9 9 0 0 0 2 18z" fill="#b8ccc9"/>`,
+    part: `<circle cx="24" cy="24" r="10" fill="#f6c453"/><path d="M24 50h24a10 10 0 0 0 0-20 14 14 0 0 0-26 4 8 8 0 0 0 2 16z" fill="#c9dad7"/>`,
+    rain: `<path d="M20 40h26a11 11 0 0 0 0-22 15 15 0 0 0-28 4 9 9 0 0 0 2 18z" fill="#9fb5b2"/><g stroke="#6fb6ff" stroke-width="3.5" stroke-linecap="round"><path d="M24 46l-3 8M34 46l-3 8M44 46l-3 8"/></g>`,
+    storm: `<path d="M20 38h26a11 11 0 0 0 0-22 15 15 0 0 0-28 4 9 9 0 0 0 2 18z" fill="#8a9f9c"/><path d="M34 38l-8 12h7l-4 10 12-15h-7l4-7z" fill="#f6c453"/>`,
+    fog: `<g stroke="#b8ccc9" stroke-width="4" stroke-linecap="round"><path d="M12 24h40M8 34h48M14 44h36"/></g>`
+  };
+  /* Thai PCD PM2.5 bands (µg/m³, 24-h standard) */
+  const PM = [
+    { max: 15, name: "คุณภาพดีมาก", c: "#3fa9f5", adv: "เหมาะกับกิจกรรมกลางแจ้ง" },
+    { max: 25, name: "คุณภาพดี", c: "#4cc76a", adv: "ทำกิจกรรมกลางแจ้งได้ตามปกติ" },
+    { max: 37.5, name: "ปานกลาง", c: "#f2d13c", adv: "กลุ่มเสี่ยงควรลดกิจกรรมกลางแจ้ง" },
+    { max: 75, name: "เริ่มมีผลต่อสุขภาพ", c: "#ff9a3c", adv: "ควรสวมหน้ากากเมื่ออยู่กลางแจ้ง" },
+    { max: Infinity, name: "มีผลต่อสุขภาพ", c: "#ff5a5a", adv: "งดกิจกรรมกลางแจ้ง สวมหน้ากาก N95" }
+  ];
+  $("pmScale").innerHTML = PM.map(b => `<i style="background:${b.c}"></i>`).join("");
+
+  function showWeather(w, a, when, stale) {
+    const cur = w.current, info = WX[cur.weather_code] || ["—", "cloud"];
+    let ic = info[1]; if (ic === "sun" && cur.is_day === 0) ic = "moon";
+    $("wxIcon").innerHTML = ICONS[ic];
+    $("temp").textContent = `${Math.round(cur.temperature_2m)}°`;
+    $("wxDesc").textContent = info[0];
+    $("feels").textContent = `รู้สึกเหมือน ${Math.round(cur.apparent_temperature)}°`;
+    $("hum").textContent = `ความชื้น ${Math.round(cur.relative_humidity_2m)}%`;
+    if (w.daily) $("hilo").textContent = `สูง/ต่ำ ${Math.round(w.daily.temperature_2m_max[0])}/${Math.round(w.daily.temperature_2m_min[0])}°`;
+    if (a && a.current && a.current.pm2_5 != null) {
+      const v = a.current.pm2_5, bi = PM.findIndex(b => v <= b.max), b = PM[bi];
+      $("pmVal").textContent = Math.round(v);
+      $("pmLevel").textContent = b.name; $("pmAdvice").textContent = b.adv;
+      $("pm").style.setProperty("--pmc", b.c);
+      [...$("pmScale").children].forEach((el, i) => el.classList.toggle("on", i === bi));
+    }
+    const t = new Date(when).toLocaleTimeString("th-TH", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+    $("wxStatus").className = "status" + (stale ? " err" : "");
+    $("wxStatus").textContent = stale ? `ออฟไลน์ ใช้ข้อมูลล่าสุดเวลา ${t} น.` : `อัปเดตล่าสุด ${t} น. · ข้อมูลจาก Open-Meteo`;
+  }
+  async function loadWeather() {
+    $("place").textContent = loc.name;
+    const q = `latitude=${loc.lat}&longitude=${loc.lon}&timezone=${encodeURIComponent(TZ)}`;
+    try {
+      const [w, a] = await Promise.all([
+        fetch(`https://api.open-meteo.com/v1/forecast?${q}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1`).then(r => { if (!r.ok) throw 0; return r.json(); }),
+        fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${q}&current=pm2_5,pm10`).then(r => r.ok ? r.json() : null).catch(() => null)
+      ]);
+      const pack = { w, a, at: Date.now(), loc: loc.name };
+      store.set("screen.wx", pack); showWeather(w, a, pack.at, false);
+    } catch {
+      const c = store.get("screen.wx", null);
+      if (c && c.loc === loc.name) showWeather(c.w, c.a, c.at, true);
+      else {
+        $("wxDesc").textContent = "เชื่อมต่อข้อมูลอากาศไม่ได้";
+        $("pmLevel").textContent = "ไม่มีข้อมูล";
+        $("wxStatus").className = "status err";
+        $("wxStatus").textContent = "ตรวจสอบอินเทอร์เน็ต ระบบจะลองใหม่ทุก 15 นาที";
+      }
+    }
+  }
+
+  /* ---------- settings ---------- */
+  const dlg = $("settings");
+  $("settingsBtn").onclick = () => { $("results").innerHTML = ""; $("setStatus").textContent = `ตอนนี้: ${loc.name}`; dlg.showModal(); $("cityInput").focus(); };
+  $("closeSet").onclick = () => dlg.close();
+  const setLoc = (l) => { loc = l; store.set("screen.loc", l); dlg.close(); loadWeather(); };
+  let timer;
+  $("cityInput").addEventListener("input", (e) => {
+    clearTimeout(timer); const v = e.target.value.trim(); if (v.length < 2) return;
+    timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(v)}&count=6&language=th`).then(r => r.json());
+        const rs = r.results || [];
+        $("results").innerHTML = rs.length ? "" : `<div class="status">ไม่พบสถานที่</div>`;
+        rs.forEach(p => { const b = document.createElement("button"); b.className = "btn";
+          b.textContent = [p.name, p.admin1, p.country].filter(Boolean).join(", ");
+          b.onclick = () => setLoc({ name: p.name, lat: p.latitude, lon: p.longitude }); $("results").appendChild(b); });
+      } catch { $("results").innerHTML = `<div class="status err">ค้นหาไม่ได้ ตรวจสอบอินเทอร์เน็ต</div>`; }
+    }, 350);
+  });
+  $("geoBtn").onclick = () => {
+    if (!navigator.geolocation) { $("setStatus").textContent = "อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง"; return; }
+    $("setStatus").textContent = "กำลังหาตำแหน่ง…";
+    navigator.geolocation.getCurrentPosition(
+      (p) => setLoc({ name: "ตำแหน่งปัจจุบัน", lat: +p.coords.latitude.toFixed(4), lon: +p.coords.longitude.toFixed(4) }),
+      () => { $("setStatus").textContent = "ใช้ตำแหน่งไม่ได้ กรุณาค้นหาชื่อเมืองแทน"; },
+      { timeout: 10000 });
+  };
+
+  /* ---------- fullscreen + keep screen on ---------- */
+  $("fsBtn").onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch {} };
+  let lock = null;
+  const keepAwake = async () => { try { if ("wakeLock" in navigator && document.visibilityState === "visible") lock = await navigator.wakeLock.request("screen"); } catch {} };
+  document.addEventListener("visibilitychange", keepAwake); keepAwake();
+
+
+  /* ---------- stopwatch + countdown ---------- */
+  const fmt = (ms, tenths) => { const t = Math.max(0, ms), h = Math.floor(t / 36e5), m = Math.floor(t / 6e4) % 60, sec = Math.floor(t / 1e3) % 60;
+    const base = (h ? h + ":" + pad(m) : pad(m)) + ":" + pad(sec); return tenths ? base + "<small>." + Math.floor(t / 100) % 10 + "</small>" : base; };
+  document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === b ? "true" : "false"));
+    document.querySelectorAll(".mode").forEach(m => m.hidden = m.dataset.for !== b.dataset.mode);
+  });
+  let swRun = false, swStartAt = 0, swAcc = 0, laps = [];
+  const swNow = () => swAcc + (swRun ? Date.now() - swStartAt : 0);
+  const swDraw = () => { $("swTime").innerHTML = fmt(swNow(), true); };
+  $("swStart").onclick = () => { if (swRun) { swAcc = swNow(); swRun = false; } else { swStartAt = Date.now(); swRun = true; }
+    $("swStart").textContent = swRun ? "หยุด" : "เริ่ม"; $("swStart").classList.toggle("pause", swRun); };
+  $("swLap").onclick = () => { if (!swNow()) return; laps.unshift(fmt(swNow(), true).replace(/<\/?small>/g, "")); $("swLaps").innerHTML = laps.map((l, i) => `<li value="${laps.length - i}">${l}</li>`).join(""); };
+  $("swReset").onclick = () => { swRun = false; swAcc = 0; laps = []; $("swLaps").innerHTML = ""; $("swStart").textContent = "เริ่ม"; $("swStart").classList.remove("pause"); swDraw(); };
+
+  let cdSet = 5 * 6e4, cdLeft = cdSet, cdRun = false, cdEnd = 0, beepTimer = null, actx = null;
+  [1, 5, 10, 15, 30, 60].forEach(n => { const b = document.createElement("button"); b.className = "btn"; b.textContent = n === 60 ? "1 ชม." : n + " น."; b.onclick = () => cdSetTo(n * 6e4); $("cdPresets").appendChild(b); });
+  const cdNow = () => cdRun ? cdEnd - Date.now() : cdLeft;
+  const cdDraw = () => { $("cdTime").textContent = fmt(Math.ceil(cdNow() / 1e3) * 1e3, false); };
+  function stopAlarm() { clearInterval(beepTimer); beepTimer = null; $("clockCard").classList.remove("done"); }
+  function cdSetTo(ms) { stopAlarm(); cdRun = false; cdSet = Math.max(6e4, Math.min(ms, 24 * 36e5)); cdLeft = cdSet; $("cdStart").textContent = "เริ่ม"; $("cdStart").classList.remove("pause"); $("cdNote").textContent = "\u00a0"; cdDraw(); }
+  function beep() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = 880; g.gain.setValueAtTime(.25, actx.currentTime); g.gain.exponentialRampToValueAtTime(.001, actx.currentTime + .5); o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + .5); } catch {} }
+  $("cdPlus").onclick = () => { if (cdRun) cdEnd += 6e4; else { cdSet = cdLeft + 6e4; cdLeft = cdSet; } stopAlarm(); cdDraw(); };
+  $("cdMinus").onclick = () => { if (cdRun) cdEnd = Math.max(Date.now() + 1e3, cdEnd - 6e4); else { cdLeft = Math.max(6e4, cdLeft - 6e4); cdSet = cdLeft; } cdDraw(); };
+  $("cdStart").onclick = () => {
+    if (beepTimer) { cdSetTo(cdSet); return; }
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch {}
+    if (cdRun) { cdLeft = cdNow(); cdRun = false; } else { cdEnd = Date.now() + cdLeft; cdRun = true; }
+    $("cdStart").textContent = cdRun ? "หยุดชั่วคราว" : "เริ่มต่อ"; $("cdStart").classList.toggle("pause", cdRun);
+    $("cdNote").textContent = cdRun ? "ครบเวลา " + new Date(cdEnd).toLocaleTimeString("th-TH", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }) + " น." : "\u00a0";
+  };
+  $("cdReset").onclick = () => cdSetTo(cdSet);
+  setInterval(() => {
+    if (swRun) swDraw();
+    if (cdRun) { if (cdNow() <= 0) { cdRun = false; cdLeft = 0; $("cdStart").textContent = "ปิดเสียง"; $("cdStart").classList.remove("pause");
+        $("cdNote").textContent = "หมดเวลาแล้ว"; $("clockCard").classList.add("done"); beep(); beepTimer = setInterval(beep, 1000);
+        setTimeout(() => { if (beepTimer) { clearInterval(beepTimer); beepTimer = null; } }, 60000);
+        document.querySelector('.tab[data-mode="cd"]').click(); }
+      cdDraw(); }
+  }, 100);
+  swDraw(); cdDraw();
+  tick(); setInterval(tick, 1000);
+  render();
+  loadWeather(); setInterval(loadWeather, 15 * 60 * 1000);
+  if ("serviceWorker" in navigator && location.protocol === "https:" && document.querySelector('link[rel="manifest"]')) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+
+</body>
+</html>
