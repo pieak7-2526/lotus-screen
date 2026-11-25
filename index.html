@@ -161,6 +161,29 @@ dialog input { font: inherit; width: 100%; box-sizing: border-box; padding: .55e
   .monthbar h1 { font-size: 1.6em; }
 }
 @media (prefers-reduced-motion: no-preference) { .cell, .btn { transition: border-color .2s; } }
+
+/* ---- bigger photo layout (approved 2026-11-25) ---- */
+.photo { flex: 1 1 46%; min-height: 12em; }
+.photo img { object-position: center 40%; }
+.photo figcaption { font-size: 1.05em; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 1.1); min-width: 0; }
+.duo .card { padding: calc(var(--u) * .8); min-width: 0; }
+.duo .wx { grid-template-columns: auto 1fr; gap: .1em .6em; }
+.duo .wx svg { width: 2.6em; height: 2.6em; }
+.duo .wx .temp { font-size: 2.3em; }
+.duo .wx .desc { font-size: .85em; }
+.duo .wx .meta { font-size: .72em; gap: .1em .8em; }
+.duo .pm { grid-template-columns: auto 1fr; gap: .4em .6em; }
+.duo .pm .ring { width: 3.8em; height: 3.8em; border-width: .3em; }
+.duo .pm .ring b { font-size: 1.3em; }
+.duo .pm .level { font-size: .95em; }
+.duo .pm .advice { font-size: .72em; }
+.duo .status { font-size: .66em; }
+.duo .label { font-size: .7em; }
+.clock .time { font-size: 3.6em; }
+.clock .date { font-size: 1.05em; }
+@media (orientation: portrait), (max-width: 899px) { .duo { grid-column: 1 / -1; } .photo { min-height: 0; } }
+@media (max-width: 520px) { .duo { grid-template-columns: 1fr; } }
 </style>
 
 <div class="app" id="app">
@@ -200,6 +223,7 @@ dialog input { font: inherit; width: 100%; box-sizing: border-box; padding: .55e
       </div>
     </section>
 
+    <div class="duo">
     <section class="card" aria-label="อุณหภูมิ">
       <div class="label"><span>อุณหภูมิ</span><span id="place">อ.พล ขอนแก่น</span></div>
       <div class="wx" style="margin-top:.6em">
@@ -219,6 +243,7 @@ dialog input { font: inherit; width: 100%; box-sizing: border-box; padding: .55e
       </div>
       <div class="status" id="wxStatus" style="margin-top:.6em">&nbsp;</div>
     </section>
+    </div>
   </aside>
 
   <main class="wall">
