@@ -274,7 +274,6 @@ dialog input { font: inherit; width: 100%; box-sizing: border-box; padding: .55e
   const TH_MON_S = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
   const TH_DAYS = ["อาทิตย์","จันทร์","อังคาร","พุธ","พฤหัสบดี","ศุกร์","เสาร์"];
   const TH_DOW_S = ["จ","อ","พ","พฤ","ศ","ส","อา"];  /* Monday-first, like the Lotus's calendar */
-  const START_YEAR = 2027;
   /* Photos shown for each month (first = the month's calendar photo). Change files/captions here. Rotates every 12 s. */
   const MONTH_PHOTOS = {
     1:  [["m01.jpg","ภาพหมู่ทั้งสาขา"],["readyday.jpg","ภาพหมู่หน้าเวที"]],
@@ -322,7 +321,11 @@ dialog input { font: inherit; width: 100%; box-sizing: border-box; padding: .55e
 
   /* ---------- clock ---------- */
   let today = nowBkk();
-  const home = () => today.y < START_YEAR ? { y: START_YEAR, m: 1 } : { y: today.y, m: today.m };
+  const home = () => ({ y: today.y, m: today.m });   /* always open on the current month */
+  let idleTimer = null;   /* after browsing other months, return to the current month after 3 minutes */
+  const armIdle = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => { const h = home(); if (view.y !== h.y || view.m !== h.m) { view = h; render(); } }, 3 * 60 * 1000); };
+  ["click", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, armIdle, { passive: true }));
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { today = nowBkk(); view = home(); render(); } });
   let view = home();
   function tick() {
     const n = nowBkk();
@@ -371,8 +374,8 @@ dialog input { font: inherit; width: 100%; box-sizing: border-box; padding: .55e
     $("note").textContent = ds ? (ds.note || "") : `ยังไม่มีข้อมูลปฏิทินปี ${y} (เพิ่มไฟล์ data/${y}.js)`;
   }
   function renderUpcoming() {
-    const t0 = today.y < START_YEAR ? toUTC(`${START_YEAR}-01-01`) - 864e5 * 14 : toUTC(key(today.y, today.m, today.d)), list = [], tNow = toUTC(key(today.y, today.m, today.d));
-    for (const yy of [today.y, today.y + 1, START_YEAR]) { const ds = window.CALENDAR_DATA[yy]; if (!ds) continue;
+    const t0 = toUTC(key(today.y, today.m, today.d)), list = [], tNow = t0;
+    for (const yy of [today.y, today.y + 1]) { const ds = window.CALENDAR_DATA[yy]; if (!ds) continue;
       for (const e of ds.events) if (toUTC(e.end || e.date) >= t0 && e.type !== "begin" && e.type !== "end" && !list.includes(e)) list.push(e); }
     list.sort((a, b) => toUTC(a.date) - toUTC(b.date));
     const html = list.slice(0, 6).map(e => {
